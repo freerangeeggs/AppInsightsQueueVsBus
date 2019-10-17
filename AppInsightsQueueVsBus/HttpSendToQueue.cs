@@ -19,7 +19,10 @@ namespace AppInsightsQueueVsBus
 
         public HttpSendToQueue()
         {
-            this.telemetryClient = new TelemetryClient(new TelemetryConfiguration(key));
+            this.telemetryClient = new TelemetryClient
+            {
+                InstrumentationKey = key
+            };
         }
 
         [FunctionName("HttpSendToQueue")]

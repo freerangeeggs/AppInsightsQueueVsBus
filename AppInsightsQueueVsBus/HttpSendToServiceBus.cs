@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.Azure.WebJobs.ServiceBus;
 
 namespace AppInsightsQueueVsBus
 {
@@ -19,11 +20,16 @@ namespace AppInsightsQueueVsBus
 
         public HttpSendToServiceBus()
         {
-            this.telemetryClient = new TelemetryClient(new TelemetryConfiguration(key));
+            this.telemetryClient = new TelemetryClient()
+            {
+                InstrumentationKey = key
+            };
         }
 
         [FunctionName("HttpSendToServiceBus")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
+        public async Task<IActionResult> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
+            [ServiceBus("myqueue", Connection = "ServiceBusConnection", EntityType = EntityType.Queue)] ICollector<string> queueCollector)
         {
             this.telemetryClient.TrackEvent("C# HTTP trigger function processed a request.");
 
@@ -35,6 +41,8 @@ namespace AppInsightsQueueVsBus
                 dynamic data = JsonConvert.DeserializeObject(requestBody);
                 name = name ?? data?.name;
             }
+
+            queueCollector.Add(name);
 
             return name != null
                 ? (ActionResult)new OkObjectResult($"Hello, {name}")
