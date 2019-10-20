@@ -1,14 +1,16 @@
-using System;
 using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace AppInsightsQueueVsBus
 {
     public class SQDoSomething
     {
+        private static HttpClient httpClient;
         private static readonly string key = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY", EnvironmentVariableTarget.Process);
         private readonly TelemetryClient telemetryClient;
 
@@ -18,12 +20,24 @@ namespace AppInsightsQueueVsBus
             {
                 InstrumentationKey = key
             };
+
+            httpClient = httpClient ?? new HttpClient();
         }
 
         [FunctionName("SQDoSomething")]
-        public void Run([QueueTrigger("myqueue-items", Connection = "AzureWebJobsStorage")]string myQueueItem, ILogger log)
+        public async Task Run([QueueTrigger("myqueue", Connection = "AzureWebJobsStorage")] string myQueueItem)
         {
-            log.LogInformation($"C# Queue trigger function processed: {myQueueItem}");
+            Person character = JsonConvert.DeserializeObject<Person>(myQueueItem);
+
+            this.telemetryClient.TrackEvent($"Looking up films for: {character.name}");
+            Console.WriteLine($"Looking up films for: {character.name}");
+
+            foreach (string film in character.films)
+            {
+                this.telemetryClient.TrackTrace($"{character.name}: {film}");
+                Console.WriteLine($"{character.name}: {film}");
+                await httpClient.GetAsync(film);
+            }
         }
     }
 }

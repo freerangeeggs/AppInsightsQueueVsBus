@@ -6,8 +6,6 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.ServiceBus;
 using Newtonsoft.Json;
 using System;
-using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -56,7 +54,7 @@ namespace AppInsightsQueueVsBus
                 queueCollector.Add(JsonConvert.SerializeObject(character));
             }
 
-            return (ActionResult)new OkObjectResult($"{result.count} results have been sent to Service Bus.");
+            return new OkObjectResult($"{result.count} results have been sent to Service Bus Queue.");
         }
     }
 }
