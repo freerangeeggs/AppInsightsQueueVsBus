@@ -1,20 +1,21 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Azure.WebJobs.ServiceBus;
+using Newtonsoft.Json;
+using System;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace AppInsightsQueueVsBus
 {
     public class HttpSendToServiceBus
     {
+        private static HttpClient httpClient;
         private static readonly string key = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY", EnvironmentVariableTarget.Process);
         private readonly TelemetryClient telemetryClient;
 
@@ -24,6 +25,8 @@ namespace AppInsightsQueueVsBus
             {
                 InstrumentationKey = key
             };
+
+            httpClient = httpClient ?? new HttpClient();
         }
 
         [FunctionName("HttpSendToServiceBus")]
@@ -35,18 +38,25 @@ namespace AppInsightsQueueVsBus
 
             string name = req.Query["name"];
 
-            using (StreamReader sr = new StreamReader(req.Body))
-            {
-                string requestBody = await sr.ReadToEndAsync();
-                dynamic data = JsonConvert.DeserializeObject(requestBody);
-                name = name ?? data?.name;
+            if (name == null)
+            { 
+                return new BadRequestObjectResult("Please pass a name on the query string or in the request body");
             }
 
-            queueCollector.Add(name);
+            HttpResponseMessage response = await httpClient.GetAsync($"https://swapi.co/api/people/?search={name}");
+            PeopleSearchResultCollection result = JsonConvert.DeserializeObject<PeopleSearchResultCollection>(await response.Content.ReadAsStringAsync());
 
-            return name != null
-                ? (ActionResult)new OkObjectResult($"Hello, {name}")
-                : new BadRequestObjectResult("Please pass a name on the query string or in the request body");
+            if (result.count == 0)
+            {
+                return new BadRequestObjectResult("Nobody found");
+            }
+
+            foreach (Person character in result.results)
+            {
+                queueCollector.Add(JsonConvert.SerializeObject(character));
+            }
+
+            return (ActionResult)new OkObjectResult($"{result.count} results have been sent to Service Bus.");
         }
     }
 }
